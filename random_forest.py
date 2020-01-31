@@ -4,9 +4,9 @@ from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from sklearn.metrics import roc_auc_score
 import pandas as pd
 
-class rand_forest:
+class Random_forest:
 
-    def __init__(self, dataset, n_estimator=450, max_depth=450, min_sample_split=2, min_sample_leaf=1, criterion='entropy'):
+    def __init__(self, dataset, n_estimator=1200, max_depth=300, min_sample_split=20, min_sample_leaf=11, criterion='entropy'):
         self.data_train_X = dataset.train_X
         self.data_test_X = dataset.val_X
         self.data_train_y = dataset.train_y
@@ -35,13 +35,13 @@ class rand_forest:
 
             params = {'n_estimators': range(best_params[0]-50, best_params[0]+50, 10), 'max_depth': range(best_params[1]-50, best_params[1]+50, 10)}
             grid_search_random_forest = RandomizedSearchCV(clf_rand, params, cv=5, scoring='accuracy', verbose=10)
-            grid_search_random_forest.fit(self.data_train_X, self.data_train_y, random_state=42)
+            grid_search_random_forest.fit(self.data_train_X, self.data_train_y)
             best_params = grid_search_random_forest.best_params_
 
             params = {'n_estimators': range(best_params[0] - 10, best_params[0] + 10, 2),
                   'max_depth': range(best_params[1] - 10, best_params[1] + 10, 2)}
             grid_search_random_forest = RandomizedSearchCV(clf_rand, params, cv=5, scoring='accuracy', verbose=10)
-            grid_search_random_forest.fit(self.data_train_X, self.data_train_y, random_state=42)
+            grid_search_random_forest.fit(self.data_train_X, self.data_train_y)
             print('best_params: ' +  str(grid_search_random_forest.best_params_))
             self.n_estimator = grid_search_random_forest.best_params_[0]
             self.max_depth = grid_search_random_forest.best_params_[1]

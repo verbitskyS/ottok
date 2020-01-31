@@ -1,123 +1,87 @@
-from __future__ import absolute_import, division, print_function, unicode_literals
-
-import numpy as np
+from sklearn import tree
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from sklearn.metrics import roc_auc_score
 import pandas as pd
-from IPython.display import clear_output
-from matplotlib import pyplot as plt
 
-from sklearn.model_selection import train_test_split
-# Load dataset.
-dataset = pd.read_csv('train.csv').head(100)
-dftrain, dfeval = train_test_split(dataset, test_size=0.1, random_state=42)
-dftrain = pd.read_csv('train.csv')
+class Boosted_trees:
 
-y_train = dftrain.pop('churn')
-y_eval = dfeval.pop('churn')
+    def __init__(self, dataset, learning_rate=0.1, loss='friedman_mse', subsampling=1.0,
+                 n_estimator=450, max_depth=450, min_sample_split=20, min_sample_leaf=11, criterion='deviance'):
+        self.data_train_X = dataset.train_X
+        self.data_test_X = dataset.val_X
+        self.data_train_y = dataset.train_y
+        self.data_test_y = dataset.val_y
+        self.learning_rate = learning_rate
+        self.loss = loss
+        self.subsampling = subsampling
+        self.n_estimator = n_estimator
+        self.max_depth = max_depth
+        self.criterion = criterion
+        self.min_sample_split = min_sample_split
+        self.min_sample_leaf = min_sample_leaf
+        self.model = None
+        self.predictions_value = None
+        self.probs_value = None
 
+    def train(self, search_params=False):
+        if search_params:
+            """
+            Находим наилучшие параметры в 3 захода
+            criterion='entropy' - лучшее чем gini, проверено в jupyter Notebook, как и дефолтные другие лучшие параметр
+            """
+            clf_rand = RandomForestClassifier()
 
+            params = {'n_estimators': range(1, 1000, 100), 'max_depth': range(1, 1000, 100)}
+            grid_search_random_forest = RandomizedSearchCV(clf_rand, params, cv=5, scoring='accuracy', verbose=10, random_state=42)
+            grid_search_random_forest.fit(self.data_train_X, self.data_train_y)
+            best_params = grid_search_random_forest.best_params_
 
-import tensorflow as tf
-tf.random.set_seed(123)
+            params = {'n_estimators': range(best_params[0]-50, best_params[0]+50, 10), 'max_depth': range(best_params[1]-50, best_params[1]+50, 10)}
+            grid_search_random_forest = RandomizedSearchCV(clf_rand, params, cv=5, scoring='accuracy', verbose=10)
+            grid_search_random_forest.fit(self.data_train_X, self.data_train_y)
+            best_params = grid_search_random_forest.best_params_
 
-fc = tf.feature_column
-
-
-CATEGORICAL_COLUMNS = list(dftrain.select_dtypes(include='object'))
-NUMERIC_COLUMNS = list(dftrain.select_dtypes(include=['float64','int64']))
-
-
-dftrain[NUMERIC_COLUMNS] = dftrain[NUMERIC_COLUMNS].fillna(dftrain[NUMERIC_COLUMNS].mean())
-dftrain[CATEGORICAL_COLUMNS] = dftrain[CATEGORICAL_COLUMNS].fillna("Y")
-dfeval[NUMERIC_COLUMNS] = dfeval[NUMERIC_COLUMNS].fillna(dfeval[NUMERIC_COLUMNS].mean())
-dfeval[CATEGORICAL_COLUMNS] = dfeval[CATEGORICAL_COLUMNS].fillna("Y")
-
-
-
-def one_hot_cat_column(feature_name, vocab):
-  return tf.feature_column.indicator_column(
-      tf.feature_column.categorical_column_with_vocabulary_list(feature_name,
-                                                 vocab))
-feature_columns = []
-for feature_name in CATEGORICAL_COLUMNS:
-  # Need to one-hot encode categorical features.
-  vocabulary = dftrain[feature_name].unique()
-  feature_columns.append(one_hot_cat_column(feature_name, vocabulary))
-
-for feature_name in NUMERIC_COLUMNS:
-  feature_columns.append(tf.feature_column.numeric_column(feature_name,
-                                           dtype=tf.float32))
-
-
-
-#example = dict(dftrain.head(1))
-#class_fc = tf.feature_column.indicator_column(tf.feature_column.categorical_column_with_vocabulary_list('class', ('First', 'Second', 'Third')))
-#print('Feature value: "{}"'.format(example['mou_Mean'].iloc[0]))
-#print('One-hot encoded: ', tf.keras.layers.DenseFeatures([class_fc])(example).numpy())
-
-#tf.keras.layers.DenseFeatures(feature_columns)(example).numpy()
-
-
-# Use entire batch since this is such a small dataset.
-NUM_EXAMPLES = len(y_train)
-
-def make_input_fn(X, y, n_epochs=None, shuffle=True):
-  def input_fn():
-    dataset = tf.data.Dataset.from_tensor_slices((dict(X), y))
-    if shuffle:
-      dataset = dataset.shuffle(NUM_EXAMPLES)
-    # For training, cycle thru dataset as many times as need (n_epochs=None).
-    dataset = dataset.repeat(n_epochs)
-    # In memory training doesn't use batching.
-    dataset = dataset.batch(NUM_EXAMPLES)
-    return dataset
-  return input_fn
+            params = {'n_estimators': range(best_params[0] - 10, best_params[0] + 10, 2),
+                  'max_depth': range(best_params[1] - 10, best_params[1] + 10, 2)}
+            grid_search_random_forest = RandomizedSearchCV(clf_rand, params, cv=5, scoring='accuracy', verbose=10)
+            grid_search_random_forest.fit(self.data_train_X, self.data_train_y)
+            print('best_params: ' + str(grid_search_random_forest.best_params_))
+            self.n_estimator = grid_search_random_forest.best_params_[0]
+            self.max_depth = grid_search_random_forest.best_params_[1]
+            self._model = grid_search_random_forest.best_estimator_
+        else:
+            self.model = GradientBoostingClassifier(learning_rate=self.learning_rate, subsample=self.subsampling,
+                                                    criterion=self.criterion, loss=self.loss,
+                                                    n_estimators=1200, max_depth=450,
+                                                    tol=1e-4, random_state=42, verbose=10)
+            self.model.fit(self.data_train_X, self.data_train_y)
 
 
-print("fssfsdf")
-# Training and evaluation input functions.
-train_input_fn = make_input_fn(dftrain, y_train)
-eval_input_fn = make_input_fn(dfeval, y_eval, shuffle=False, n_epochs=1)
+    def show_feature_important(self):
+        print(pd.DataFrame(
+            {'features': self.data_train_X.columns, 'feature_important': self.model.feature_importances_}).sort_values(
+            'feature_important'))
 
-linear_est = tf.estimator.LinearClassifier(feature_columns)
-clear_output()
-print("fssfsdf")
-# Train model.
-linear_est.train(train_input_fn, max_steps=10)
-print("fssfsdf")
 
-# Evaluation.
-result = linear_est.evaluate(eval_input_fn)
-clear_output()
-print(pd.Series(result))
+    def predictions(self, X_test):
+        self.predictions_value = self.model.predict(X_test)
+        return self.predictions_value
 
-# Since data fits into memory, use entire dataset per layer. It will be faster.
-# Above one batch is defined as the entire dataset.
-n_batches = 1
-est = tf.estimator.BoostedTreesClassifier(feature_columns,
-                                          n_batches_per_layer=n_batches)
 
-# The model will stop training once the specified number of trees is built, not
-# based on the number of steps.
-est.train(train_input_fn, max_steps=100)
 
-# Eval.
-result = est.evaluate(eval_input_fn)
-clear_output()
-print(pd.Series(result))
+    def probs(self, X_test):
+        self.probs_value = self.model.predict_proba(X_test)
+        return self.probs_value
 
-pred_dicts = list(est.predict(eval_input_fn))
-probs = pd.Series([pred['probabilities'][1] for pred in pred_dicts])
 
-probs.plot(kind='hist', bins=20, title='predicted probabilities')
-plt.show()
 
-from sklearn.metrics import roc_curve
+    def scores_roc(self):
+        try:
+            pred_val = self.model.predict(self.data_test_X)
+            print("Roc val Random Forest: " + str(roc_auc_score(self.data_test_y, pred_val)))
+        except Exception:
+            print("Error!")
 
-fpr, tpr, _ = roc_curve(y_eval, probs)
-plt.plot(fpr, tpr)
-plt.title('ROC curve')
-plt.xlabel('false positive rate')
-plt.ylabel('true positive rate')
-plt.xlim(0,)
-plt.ylim(0,)
-plt.show()
+
+
