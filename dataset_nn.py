@@ -8,10 +8,6 @@ from sklearn.model_selection import train_test_split
 warnings.filterwarnings('ignore')
 
 
-"""
-Продготовка данных для леса и регрессии
-"""
-
 class Dataset:
 
     def __init__(self, dir_train='train.csv', one_hot_enc=True):
