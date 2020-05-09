@@ -66,7 +66,7 @@ class Dataset:
                 q_low = self.data_train[column].quantile(1 - quantile_value)
                 self.data_train = self.data_train[(self.data_train[column] <= q_high) & (self.data_train[column] >= q_low)]
 
-            #стандартизация!!
+            #нормализация!!
             self.data_train[column] = ((self.data_train[column] - self.data_train[column].min()) / (
                         self.data_train[column].max() - self.data_train[column].min()))
 
